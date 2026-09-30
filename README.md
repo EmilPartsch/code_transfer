@@ -1,10 +1,8 @@
 """
-Replicate Table D.0.2: decomposition of the change in the fiscal sustainability indicator (rHBI)
-for permanent, unfinanced increases in structural employment by age group.
 
 Run from Analysis/Standard_shocks after shock_labour_supply_by_age.gms.
 
-Decomposition (paper, Appendix A), with N = numerator of rHBI and Y = PV of GDP:
+Decomposition, with N = numerator of rHBI and Y = PV of GDP:
     dS = dN / Y_s  +  N_b * (1/Y_s - 1/Y_b)
          ^ budget items    ^ "Share of change from GDP"
 Each budget item's share is its (sign-adjusted) change in present value divided by Y_s and by dS.
