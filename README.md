@@ -1,91 +1,110 @@
-# ======================================================================================================================
-# Replication of Table D.0.2:
-# Permanent, unfinanced increase in structural employment of 1,000 persons, by age group
-#
-# Built on "Arbejdsudbud_beskaeftigelse" in standard_shocks.gms: structural employment (snLHh) is exogenous and
-# shocked, and the participation parameter (uDeltag) is endogenous for all ages 15-100.
-# Only ages inside the shocked group are changed; all other ages stay at baseline employment.
-#
-# Units (checked in Model/Gdx/baseline.gdx): snLHh is in 1,000 persons (snLHh[tot,2030] = 3,088).
-# 1,000 persons = 1 unit of snLHh.
-# ======================================================================================================================
-$onDotL # Allow implicit .l suffix
-$SETLOCAL shock_year 2030;
-$SETLOCAL baseline_end 2129;
+"""
+Replicate Table D.0.2: decomposition of the change in the fiscal sustainability indicator (rHBI)
+for permanent, unfinanced increases in structural employment by age group.
 
-set_time_periods(%shock_year%-1, %baseline_end%);
-@load_as(All, "Gdx/baseline.gdx", _baseline)
-$GROUP All_ All;
-@unload(Gdx/shock_year.gdx);
-@load_dummies(t, "Gdx/baseline.gdx")
+Run from Analysis/Standard_shocks after shock_labour_supply_by_age.gms.
 
-# Solve M_base with %baseline_end% as terminal year and use that solution as baseline
-@set(All_, .l, _baseline);
-$FIX All; $UNFIX G_endo;
-@solve(M_base);
-@set(All_, _baseline, .l);
-$UNFIX All;
+Decomposition (paper, Appendix A), with N = numerator of rHBI and Y = PV of GDP:
+    dS = dN / Y_s  +  N_b * (1/Y_s - 1/Y_b)
+         ^ budget items    ^ "Share of change from GDP"
+Each budget item's share is its (sign-adjusted) change in present value divided by Y_s and by dS.
+"""
+import dreamtools as dt
+import pandas as pd
 
-OPTION SOLVELINK=0, NLP=CONOPT4;
+T = 2030  # Shock year = year in which rHBI is evaluated
+GDX = "Gdx"
+SHOCKS = {
+    "20-29": "Arbejdsudbud_alder_20_29_ufin",
+    "30-39": "Arbejdsudbud_alder_30_39_ufin",
+    "40-49": "Arbejdsudbud_alder_40_49_ufin",
+    "50-59": "Arbejdsudbud_alder_50_59_ufin",
+    "60-69": "Arbejdsudbud_alder_60_69_ufin",
+    # "1% (Table 4.2.2)": "Arbejdsudbud_beskaeftigelse_ufin",  # useful sanity check
+}
 
-# ----------------------------------------------------------------------------------------------------------------------
-# Shock settings
-# ----------------------------------------------------------------------------------------------------------------------
-scalar
-  shock_persons "Extra structurally employed, in 1,000 persons (units of snLHh)" /1/
-  per_age       "1: shock_persons added at EACH age in the group (10 ages -> 10,000 persons);
-                 0: shock_persons in TOTAL for the group, spread by baseline employment" /1/
-  move_soc      "0: transfer groups (snSoc) unchanged, as in the standard shocks;
-                 1: move people out of transfer groups using dSoc2dBesk" /0/
-;
-parameter
-  permanent_profile[t] "Permanent shock profile"
-  group_total[t]       "Baseline structural employment in the shocked age group, 1,000 persons"
-  d_snLHh_tot[t]       "Shock to total structural employment, 1,000 persons"
-;
-permanent_profile[t]$(tx0[t]) = 1;
 
-# ----------------------------------------------------------------------------------------------------------------------
-# Age groups = columns of Table D.0.2
-# ----------------------------------------------------------------------------------------------------------------------
-$FOR1 {label}, {lo}, {hi} in [
-  ("20_29", 20, 29),
-  ("30_39", 30, 39),
-  ("40_49", 40, 49),
-  ("50_59", 50, 59),
-  ("60_69", 60, 69),
-]:
-  Model M_shock /M_base/;
-  @set(All_, .l, _baseline);
+def get(db, name, idx=None, suffix=""):
+    """Value in year T of a variable (optionally one element of its first index)."""
+    x = getattr(db, name + suffix)
+    if idx is not None:
+        x = x.xs(idx, level=0)
+    return float(x.loc[T])
 
-  # Same endogeneity as Arbejdsudbud_beskaeftigelse: snLHh exogenous, uDeltag endogenous, for ALL ages.
-  # Ages outside the group therefore stay exactly at baseline employment.
-  $GROUP G_shock_endo
-    G_endo
-    -snLHh[a,t]$(tx0[t] and a15t100[a]), uDeltag[a,t]$(tx0[t] and a15t100[a])
-  ;
 
-  group_total[t] = sum(a$(aVal[a] >= {lo} and aVal[a] <= {hi}), snLHh[a,t]);
+def items(db, suffix=""):
+    """Present values (in year T) that enter rHBI, and rHBI's numerator."""
+    g = lambda name, idx=None: get(db, name, idx, suffix)
+    d = {
+        "Y": g("nvBNP"),
+        "revenues": g("nvOffPrimInd"),
+        "direct_taxes": g("nvtDirekte"),
+        "expenditures": g("nvOffPrimUd"),
+        "gov_consumption": g("nvG", "gTot"),
+        "transfers": g("nvOvf", "tot"),
+        "investments": g("nvOffInv"),
+        "subsidies": g("nvOffSub"),
+        "other_exp": g("nvOffUdRest"),
+        "omv": g("nvOffOmv"),
+        "rentemarginal": g("nvRenteMarginal"),
+        "rHBI": g("rHBI"),
+    }
+    # Initial net assets term: vOff13Net[T-1]/fv * (1+mrOffRente[T+1])
+    fv = float(db.fv)
+    debt = float(getattr(db, "vOff13Net" + suffix).loc[T - 1]) / fv * (1 + float(getattr(db, "mrOffRente" + suffix).loc[T + 1]))
+    d["N"] = g("nvPrimSaldo") + d["omv"] - d["rentemarginal"] + debt
+    d["other_rev"] = d["revenues"] - d["direct_taxes"]
+    assert abs(d["N"] / d["Y"] - d["rHBI"]) < 1e-6, "Recomputed S does not match rHBI"
+    return d
 
-  snLHh[a,t]$(tx0[t] and aVal[a] >= {lo} and aVal[a] <= {hi})
-    = snLHh[a,t]
-    + shock_persons * permanent_profile[t]
-      * (per_age + (1 - per_age) * snLHh[a,t] / group_total[t]);
 
-  d_snLHh_tot[t] = sum(a$a15t100[a], snLHh[a,t] - snLHh_baseline[a,t]);
-  display "Shock to total structural employment (1,000 persons):", d_snLHh_tot;
+def reference(s, fallback):
+    """Use the baseline re-solved inside the shock run (<var>_baseline parameters) if available."""
+    try:
+        return items(s, "_baseline")
+    except (AttributeError, KeyError, AssertionError):
+        return items(fallback)
 
-  # Optional: take the new workers out of transfer groups in the same proportions as the model uses cyclically
-  snSoc[soc,t]$(tx0[t] and move_soc) = snSoc[soc,t] + dSoc2dBesk[soc,t] * d_snLHh_tot[t];
 
-  # Unfinanced: no tax reaction. Solve 1/100 of the shock first, then the full shock.
-  @set_linear_combination(All, 0.01, .l, _baseline);
-  $FIX All; $UNFIX G_shock_endo;
-  @solve(M_shock)
-  @set_linear_combination(All, 100, .l, _baseline);
-  $FIX All; $UNFIX G_shock_endo;
-  @solve(M_shock)
+def decompose(b, s):
+    dS = s["N"] / s["Y"] - b["N"] / b["Y"]
+    share = lambda x, sign=1: sign * (s[x] - b[x]) / s["Y"] / dS
+    rows = {
+        "Change in fiscal sustainability indicator (dS), %-points": 100 * dS,
+        "Share of change from GDP": b["N"] * (1 / s["Y"] - 1 / b["Y"]) / dS,
+        "Share of change from primary expenditures (total)": share("expenditures", -1),
+        "  Government consumption": share("gov_consumption", -1),
+        "  Transfers": share("transfers", -1),
+        "  Public investments": share("investments", -1),
+        "  Subsidies": share("subsidies", -1),
+        "  Other expenditures": share("other_exp", -1),
+        "Share of change from primary revenues (total)": share("revenues"),
+        "  Direct taxes": share("direct_taxes"),
+        "  Other revenues": share("other_rev"),
+        "Share from revaluations and interest margin (not in paper)": share("omv") - share("rentemarginal"),
+    }
+    total = sum(v for k, v in rows.items() if k.startswith("Share"))
+    assert abs(total - 1) < 1e-6, f"Shares sum to {total}, not 100%"
+    return rows
 
-  $UNFIX All;
-  @unload(Gdx/Arbejdsudbud_alder_{label}_ufin);
-$ENDFOR1
+
+if __name__ == "__main__":
+    # dS is tiny (~0.0003), so the reference must be the baseline re-solved with the same terminal year as the shocks.
+    # Preferred: <var>_baseline parameters in the shock GDX; else the zero shock; else baseline.gdx (with a warning).
+    import os
+    if os.path.exists(f"{GDX}/Nulstoed_ufin.gdx"):
+        b_file = dt.Gdx(f"{GDX}/Nulstoed_ufin.gdx")
+    else:
+        print("WARNING: using baseline.gdx as fallback reference - check that its terminal year matches the shocks.")
+        b_file = dt.Gdx(f"{GDX}/baseline.gdx")
+    table = {}
+    for label, name in SHOCKS.items():
+        s = dt.Gdx(f"{GDX}/{name}.gdx")
+        table[label] = decompose(reference(s, b_file), items(s))
+    table = pd.DataFrame(table)
+
+    fmt = table.copy().astype(object)
+    fmt.iloc[0] = table.iloc[0].map("{:.4f}".format)
+    fmt.iloc[1:] = table.iloc[1:].map("{:.0%}".format)
+    print(fmt.to_string())
+    table.to_csv("table_D02.csv")
