@@ -86,9 +86,9 @@
       <th>BNP (qBNP)</th>
       <td>0.1625</td>
       <td>-0.1441</td>
-      <td>-0.1876</td>
+      <td>-0.0820</td>
       <td>0.2637</td>
-      <td>0.0</td>
+      <td>0.1159</td>
       <td>0.4334</td>
       <td>0.2313</td>
       <td>0.0490</td>
@@ -110,9 +110,9 @@
       <th>BVT-deflator (pBVT)</th>
       <td>0.0736</td>
       <td>1.2117</td>
-      <td>-0.0688</td>
+      <td>-0.0300</td>
       <td>0.1199</td>
-      <td>0.0</td>
+      <td>0.0183</td>
       <td>0.1290</td>
       <td>0.1045</td>
       <td>0.0546</td>
@@ -134,9 +134,9 @@
       <th>Beskæftigelse (nL)</th>
       <td>0.0371</td>
       <td>-0.0241</td>
-      <td>-0.0421</td>
+      <td>-0.0182</td>
       <td>0.0598</td>
-      <td>0.0</td>
+      <td>0.0277</td>
       <td>0.0771</td>
       <td>0.0523</td>
       <td>0.1655</td>
@@ -158,9 +158,9 @@
       <th>Boliginvesteringer (qI_s[iB,bol])</th>
       <td>0.8582</td>
       <td>0.5735</td>
-      <td>1.4799</td>
+      <td>0.5996</td>
       <td>1.3759</td>
-      <td>0.0</td>
+      <td>1.4446</td>
       <td>-0.1316</td>
       <td>1.1606</td>
       <td>0.5887</td>
@@ -182,9 +182,9 @@
       <th>Boligpriser (pBolig)</th>
       <td>0.7169</td>
       <td>0.2498</td>
-      <td>1.1779</td>
+      <td>0.4778</td>
       <td>1.1487</td>
-      <td>-0.0</td>
+      <td>1.1654</td>
       <td>-0.0759</td>
       <td>0.9705</td>
       <td>0.5338</td>
@@ -206,9 +206,9 @@
       <th>Eksport (qXy)</th>
       <td>-0.0511</td>
       <td>0.1039</td>
-      <td>0.0226</td>
+      <td>0.0101</td>
       <td>-0.0834</td>
-      <td>0.0</td>
+      <td>-0.0333</td>
       <td>-0.0699</td>
       <td>-0.0726</td>
       <td>-0.0581</td>
@@ -230,9 +230,9 @@
       <th>Import (qM)</th>
       <td>0.3025</td>
       <td>0.4762</td>
-      <td>-0.3632</td>
+      <td>-0.1582</td>
       <td>0.4923</td>
-      <td>0.0</td>
+      <td>0.2030</td>
       <td>0.7325</td>
       <td>0.4312</td>
       <td>0.1704</td>
@@ -254,9 +254,9 @@
       <th>Nominelle lønninger (vhW_DA)</th>
       <td>0.1765</td>
       <td>-0.0176</td>
-      <td>-0.1758</td>
+      <td>-0.0767</td>
       <td>0.2875</td>
-      <td>0.0</td>
+      <td>0.1340</td>
       <td>0.3914</td>
       <td>0.2504</td>
       <td>0.8469</td>
@@ -278,9 +278,9 @@
       <th>Primær saldo, andel af BNP<br>(vPrimSaldo / vBNP)</th>
       <td>-0.5127</td>
       <td>-0.8401</td>
-      <td>-2.4939</td>
+      <td>-1.0479</td>
       <td>-0.8385</td>
-      <td>0.0</td>
+      <td>-0.7159</td>
       <td>-1.0971</td>
       <td>-0.7232</td>
       <td>-0.6367</td>
@@ -302,9 +302,9 @@
       <th>Privat forbrug (qC)</th>
       <td>0.6581</td>
       <td>0.0131</td>
-      <td>-1.0693</td>
+      <td>-0.4611</td>
       <td>1.0723</td>
-      <td>0.0</td>
+      <td>0.2839</td>
       <td>1.8643</td>
       <td>0.9454</td>
       <td>0.2773</td>
@@ -326,9 +326,9 @@
       <th>Private investeringer<br>(qI_s[iM,spTot]+qIbErhverv)</th>
       <td>0.1684</td>
       <td>0.3866</td>
-      <td>-0.1565</td>
+      <td>-0.0677</td>
       <td>0.2749</td>
-      <td>0.0</td>
+      <td>0.2927</td>
       <td>0.5390</td>
       <td>0.2396</td>
       <td>0.1724</td>
