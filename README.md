@@ -1,64 +1,4 @@
-import os
-import sys
-import dreamtools as dt
-import pandas as pd
-import joblib
-from plotly.subplots import make_subplots
-import plotly.graph_objects as go
-import glob
-from pyhtml2pdf import converter
-from PyPDF2 import PdfMerger
 
-# Set reference database
-dt.REFERENCE_DATABASE = dt.Gdx(fr"../../Model/Gdx/sets.gdx")
-
-# Import variables to plot
-sys.path.insert(0, os.path.abspath("../Templates"))
-import variables_to_plot as vtp
-
-# Define constants
-t1 = 2030  # Shock year
-T = 2050  # Last year to plot
-dt.time(t1-1, T)
-
-output_folder = r"Output"
-table_folder = r"Output/tables"
-fname = "standard_shocks"
-output_extension = ".png"
-
-# Create output and table folders if they do not exist
-os.makedirs(output_folder, exist_ok=True)
-os.makedirs(table_folder, exist_ok=True)
-
-DA = True  # Should labels be in Danish or English?
-FM_multipliers = True  # Should the multipliers be in full model or standard model?
-FM_tab_previous = False  # Tab previous version of FM multipliers alongside new version
-tab_previous = True  # Plot/tab previous version of standard shocks alongside new version
-
-Gdx_folder = "Gdx"  # Folder where the .pkl files with previous results are stored
-
-# Define GDX folders and labels
-gdx_folders_info = [
-    (r"Gdx", ""),
-    # (r"<path here>", "<Label for model version>"),
-]
-gdx_folders, gdx_labels = zip(*gdx_folders_info)
-
-# Define variations info
-variations_info = [
-    ("_midl", "Midlertidig", "Transitory"),
-]
-shock_variation_suffixes, shock_variation_labels_DA, shock_variation_labels_EN = zip(*variations_info)
-
-# Import information on which shocks to plot and how to plot them
-from shocks_multiplicator_table import shock_names as table_shock_names, shock_labels_DA as table_shock_labels_DA, shock_labels_EN as table_shock_labels_EN, shock_specific_plot_info as table_shock_specific_plot_info
-from shocks_to_plot import shock_names as plot_shock_names, shock_labels_DA as plot_shock_labels_DA, shock_labels_EN as plot_shock_labels_EN, shock_specific_plot_info as plot_shock_specific_plot_info
-
-# Select which figures to plot
-figure_info = vtp.standard_IRF_check_figures
-
-# Add custom CSS for the table to make it more visually appealing
-html_style = """
 <style>
     body {
         font-family: Arial, sans-serif;
@@ -90,277 +30,321 @@ html_style = """
         background-color: #f1f1f1;
     }
 </style>
-"""
-
-# Define variable labels and functions
-variable_labels_DK, variable_labels_EN, get_variable_functions, operators = [list(t) for t in zip(*figure_info)]
-
-def append_spaces_to_make_unique(strings):
-    """Hack to make sure labels are also unique identifiers by adding spaces"""
-    unique_labels = []
-    for string in strings:
-        if string not in unique_labels:
-            unique_labels.append(string)
-        else:
-            new_string = string + ' '
-            while new_string in unique_labels:
-                new_string += ' '
-            unique_labels.append(new_string)
-    return unique_labels
-
-variable_labels_DK = append_spaces_to_make_unique(variable_labels_DK)
-variable_labels_EN = append_spaces_to_make_unique(variable_labels_EN)
-
-# Set labels depending on language
-variable_labels = variable_labels_DK if DA else variable_labels_EN
-table_shock_labels = table_shock_labels_DA if DA else table_shock_labels_EN
-plot_shock_labels = plot_shock_labels_DA if DA else plot_shock_labels_EN
-shock_variation_labels = shock_variation_labels_DA if DA else shock_variation_labels_EN
-
-def shock_files_exist(shock):
-    """Return True if GDX files exist for each variation of the shock"""
-    return all(
-        os.path.exists(fr"{folder}/{shock}{suffix}.gdx")
-        for suffix in shock_variation_suffixes
-        for folder, _ in gdx_folders_info
-    )
-
-def load_previous(path, enabled):
-    """Load previous results from a .pkl file if enabled and the file exists, otherwise return None"""
-    if not enabled:
-        return None
-    if not os.path.exists(path):
-        print(f"No previous results found at '{path}' - continuing with current results only")
-        return None
-    return joblib.load(path)
-
-def save_current(df, path):
-    """Save current results (without lambda functions and complex objects) for later comparison"""
-    joblib.dump(df.drop(columns=['getter', 'database', 'baseline']), path)
-
-# Labels for y-axes based on the type of multiplier
-yaxis_title_from_operator = {
-    "pq": "Pct.-ændring" if DA else "Pct. change",
-    "pm": "Ændring i pct.-point" if DA else "Change in pct. points",
-    "": "",
-}
-
-def create_dataframe(shock_names, shock_labels, shock_specific_plot_info):
-    """Create dataframe with all combinations of shocks, variations, model versions, and variables"""
-    data = []
-    for folder, folder_label in gdx_folders_info:
-        baseline = dt.Gdx(fr"{folder}/baseline.gdx")
-        for shock_name, shock_label, shock_specific_plot in zip(shock_names, shock_labels, shock_specific_plot_info):
-            if not shock_files_exist(shock_name):
-                print(f"Skipping '{shock_name}' as one or more GDX files are missing")
-                continue
-
-            for suffix, variation_label in zip(shock_variation_suffixes, shock_variation_labels):
-                database = dt.Gdx(fr"{folder}/{shock_name}{suffix}.gdx")
-                for variable_index, (variable_label, getter, operator) in enumerate(zip(
-                    variable_labels,
-                    get_variable_functions,
-                    operators
-                )):
-                    data.append({
-                        "variable_index": variable_index,
-                        "folder": folder,
-                        "folder_label": folder_label,
-                        "shock_name": shock_name,
-                        "shock_label": shock_label,
-                        "variation": suffix,
-                        "variation_label": variation_label,
-                        "database": (database,),  # Wrap in tuple to force pandas to treat as object
-                        "baseline": (baseline,),  # Wrap in tuple to force pandas to treat as object
-                        "getter": getter,
-                        "variable_label": variable_label,
-                        "operator": operator,
-                    })
-    return pd.DataFrame(data)
-
-# Create dataframes for tables and plots
-if FM_multipliers:
-    table_data = create_dataframe(table_shock_names, table_shock_labels, table_shock_specific_plot_info)
-plot_data = create_dataframe(plot_shock_names, plot_shock_labels, plot_shock_specific_plot_info)
-
-def get_multiplier(row):
-    """Get multiplier for a given row in the dataframe"""
-    return dt.DataFrame(row.database, row.operator, row.getter, baselines=row.baseline).squeeze()
-
-# Apply get_multiplier to each row in the dataframes to fetch shock responses from databases
-if FM_multipliers:
-    df_FM = (table_data
-        .apply(get_multiplier, axis=1)
-        .melt(ignore_index=False)
-        .join(table_data)
-    )
-    fname = "previous_shocks_FM"
-    pkl_path_FM = f"{Gdx_folder}/{fname}.pkl"
-
-    # Load previous shock data (None if flag is off or no file exists yet) BEFORE overwriting it
-    df_FM_previous = load_previous(pkl_path_FM, FM_tab_previous)
-    save_current(df_FM, pkl_path_FM)
-
-    if df_FM_previous is not None:
-        models_FM = [(df_FM_previous, fname), (df_FM, "current_shocks_FM")]  # for comparison between previous and current shocks
-    else:
-        models_FM = [(df_FM, "current_shocks_FM")]
-    compare_FM = len(models_FM) > 1
-
-df_plot = (plot_data
-    .apply(get_multiplier, axis=1)
-    .melt(ignore_index=False)
-    .join(plot_data)
-)
-
-fname = "previous_shocks"
-pkl_path = f"{Gdx_folder}/{fname}.pkl"
-
-# Load previous shock data (None if flag is off or no file exists yet) BEFORE overwriting it
-df_previous = load_previous(pkl_path, tab_previous)
-save_current(df_plot, pkl_path)
-
-if df_previous is not None:
-    models = [(df_previous, fname), (df_plot, "current_shocks")]  # for comparison between previous and current shocks
-else:
-    models = [(df_plot, "current_shocks")]
-
-# Create tables with the values of the multipliers in different years
-if FM_multipliers:
-    # Initialize a list to store the results for the table
-    table_data = []
-
-    # Loop over model, variable, and shock
-    for model, color in zip(models_FM, dt.dream_colors_rgb.values()):
-        for row, variable_label in enumerate(variable_labels, 1):
-            for col, shock_name in enumerate(table_shock_names, 1):
-                df_current = model[0]
-                data = df_current[(df_current.shock_name == shock_name) & (df_current.variable_label == variable_label)]
-                if data.empty:
-                    continue  # Shock/variable not available in this model version
-                # Extract the first year effect (first value after the pre-shock year)
-                first_year_effect = data.value.iloc[1]
-                # Append the result to the table data (model, shock, variable, and the first year effect)
-                shock_label = data.shock_label.unique()[0]
-                table_data.append([model[1], variable_label, shock_label, first_year_effect])
-
-    # Create a DataFrame from the table data
-    table_df = pd.DataFrame(table_data, columns=['Model', 'Variable', 'Shock', 'First Year Effect'])
-
-    # Handle different table structures depending on whether previous results are available
-    if not compare_FM:
-        # Pivot with shocks as columns and variables as rows
-        pivot_table = table_df.pivot_table(
-            index='Variable',
-            columns='Shock',
-            values='First Year Effect',
-            aggfunc='mean'  # Handles duplicates, if any
-        )
-        pivot_table.columns = [col for col in pivot_table.columns]
-    else:
-        # Pivot with shocks and variables as index, models as columns
-        pivot_table = table_df.pivot_table(
-            index=['Variable', 'Shock'],
-            columns='Model',
-            values='First Year Effect'
-        ).reorder_levels(['Shock', 'Variable']).sort_index()
-
-    # General formatting for the pivot table
-    pivot_table = (
-        pivot_table
-        .fillna(0)  # Replace NaN with 0
-        .round(4)   # Round values to 4 decimal places
-    )
-
-    # Generate the HTML table with custom styling
-    html_table = pivot_table.to_html(
-        escape=False,
-        border=0,
-        classes="table table-striped table-hover",
-        justify="center",
-        header=True,
-        index=True
-    )
-    full_html = html_style + html_table
-
-    with open(f"{table_folder}/standard_multipliers_FM.html", "w") as f:
-        f.write(full_html)
-
-# Plot all shock responses
-shock_names_IRF = ["Eksportmarkedsvækst", "Udenlandske priser", "Rente", "Arbejdsudbud, beskæftigelse", "Offentlige varekøb", "Bundskat"]
-variable_labels = [entry[0] for entry in figure_info]
-
-fig = make_subplots(
-    cols=len(shock_names_IRF), rows=len(variable_labels),
-    subplot_titles=shock_names_IRF,
-    row_titles=variable_labels,
-    vertical_spacing=0.05,
-    horizontal_spacing=0.05,
-)
-
-fig.update_layout(
-    height=2000, width=1200,
-    template="plotly_white",
-    legend=dict(
-        xanchor="center",
-        orientation="h",
-        y=-0.05,
-        x=0.5,
-    )
-)
-
-fig.for_each_annotation(lambda a: a.update(font_size=14, font_family="Hind"))
-
-# Initialize a list to store the results for the table
-table_data = []
-
-# Loop over model, variable, and shock
-for model, color in zip(models, dt.dream_colors_rgb.values()):
-    for row, variable_label in enumerate(variable_labels, 1):
-        for col, shock_label in enumerate(shock_names_IRF, 1):
-            df_current = model[0]
-            data = df_current[(df_current.shock_label == shock_label) & (df_current.variable_label == variable_label)]
-            if data.empty:
-                continue  # Shock/variable not available in this model version
-            first_year_effect = data.value.iloc[1]
-            table_data.append([model[1], variable_label, shock_label, first_year_effect])
-            fig.add_trace(go.Scatter(
-                y=data.value,
-                x=data.t,
-                line_color=color,
-                name=model[1],
-                mode="lines",
-                legendgroup=model[1],
-                showlegend=(row+col==2),
-            ), row=row, col=col)
-
-for row in range(2, len(variable_labels) + 1):
-    fig.update_xaxes(showticklabels=False, row=row)
-
-fname = "standard_IRFs"
-fig.write_html(f"{output_folder}/{fname}.html")
-
-# Make table comparing old and new (or just current if no previous results)
-table_df = pd.DataFrame(table_data, columns=['Model', 'Variable', 'Shock', 'Multiplier'])
-pivot_table = (
-    table_df
-    .pivot_table(index=['Variable', 'Shock'], columns='Model', values='Multiplier')
-    .reorder_levels(['Shock', 'Variable'])
-    .sort_index()
-    .fillna(0)
-    .round(4)
-)
-
-html_table = pivot_table.to_html(
-    escape=False,
-    border=0,
-    classes="table table-striped table-hover",
-    justify="center",
-    header=True,
-    index=True,
-)
-
-full_html = html_style + html_table
-
-with open(f"{table_folder}/standard_multipliers.html", "w") as f:
-    f.write(full_html)
+<table class="dataframe table table-striped table-hover">
+  <thead>
+    <tr style="text-align: center;">
+      <th></th>
+      <th>AM-bidrag</th>
+      <th>Afgift på private erhvervs materialeinput</th>
+      <th>Aktieskat</th>
+      <th>Bundskat</th>
+      <th>Ejendomsskat</th>
+      <th>Energiafgift til privat forbrug</th>
+      <th>Ikke-skattepligtige overførselsindkomster</th>
+      <th>Løntilskud</th>
+      <th>Moms</th>
+      <th>Offentlig beskæftigelse</th>
+      <th>Offentlig løn</th>
+      <th>Offentlige investeringer</th>
+      <th>Offentlige varekøb</th>
+      <th>Produktionssubsidier ekskl. løntilskud</th>
+      <th>Produktsubsidier</th>
+      <th>Registreringsafgift til privat forbrug</th>
+      <th>Selskabsskat</th>
+      <th>Skattepligtige overførselsindkomster</th>
+      <th>Vægtafgift</th>
+      <th>Øvrige forbrugsafgifter</th>
+      <th>Øvrige overførsler til husholdninger</th>
+    </tr>
+    <tr>
+      <th>Variable</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>BNP (qBNP)</th>
+      <td>0.1625</td>
+      <td>-0.1441</td>
+      <td>-0.1876</td>
+      <td>0.2637</td>
+      <td>0.0</td>
+      <td>0.4334</td>
+      <td>0.2313</td>
+      <td>0.0490</td>
+      <td>0.1496</td>
+      <td>0.7086</td>
+      <td>1.0958</td>
+      <td>0.4129</td>
+      <td>0.3923</td>
+      <td>0.0451</td>
+      <td>0.0641</td>
+      <td>0.3880</td>
+      <td>0.0215</td>
+      <td>0.1603</td>
+      <td>0.2664</td>
+      <td>0.3895</td>
+      <td>0.2649</td>
+    </tr>
+    <tr>
+      <th>BVT-deflator (pBVT)</th>
+      <td>0.0736</td>
+      <td>1.2117</td>
+      <td>-0.0688</td>
+      <td>0.1199</td>
+      <td>0.0</td>
+      <td>0.1290</td>
+      <td>0.1045</td>
+      <td>0.0546</td>
+      <td>0.2016</td>
+      <td>0.2908</td>
+      <td>0.0512</td>
+      <td>0.1533</td>
+      <td>0.1316</td>
+      <td>-0.1513</td>
+      <td>0.4082</td>
+      <td>-0.0190</td>
+      <td>0.0076</td>
+      <td>0.0710</td>
+      <td>0.1213</td>
+      <td>0.1049</td>
+      <td>0.1201</td>
+    </tr>
+    <tr>
+      <th>Beskæftigelse (nL)</th>
+      <td>0.0371</td>
+      <td>-0.0241</td>
+      <td>-0.0421</td>
+      <td>0.0598</td>
+      <td>0.0</td>
+      <td>0.0771</td>
+      <td>0.0523</td>
+      <td>0.1655</td>
+      <td>0.0340</td>
+      <td>0.5604</td>
+      <td>0.0097</td>
+      <td>0.0855</td>
+      <td>0.0760</td>
+      <td>0.0284</td>
+      <td>0.0294</td>
+      <td>0.0329</td>
+      <td>-0.0103</td>
+      <td>0.0363</td>
+      <td>0.0603</td>
+      <td>0.0682</td>
+      <td>0.0599</td>
+    </tr>
+    <tr>
+      <th>Boliginvesteringer (qI_s[iB,bol])</th>
+      <td>0.8582</td>
+      <td>0.5735</td>
+      <td>1.4799</td>
+      <td>1.3759</td>
+      <td>0.0</td>
+      <td>-0.1316</td>
+      <td>1.1606</td>
+      <td>0.5887</td>
+      <td>0.0251</td>
+      <td>0.1378</td>
+      <td>0.7184</td>
+      <td>-0.3303</td>
+      <td>-0.1146</td>
+      <td>0.3225</td>
+      <td>0.1841</td>
+      <td>-0.5154</td>
+      <td>0.3611</td>
+      <td>0.7634</td>
+      <td>1.3418</td>
+      <td>-0.1251</td>
+      <td>1.3831</td>
+    </tr>
+    <tr>
+      <th>Boligpriser (pBolig)</th>
+      <td>0.7169</td>
+      <td>0.2498</td>
+      <td>1.1779</td>
+      <td>1.1487</td>
+      <td>-0.0</td>
+      <td>-0.0759</td>
+      <td>0.9705</td>
+      <td>0.5338</td>
+      <td>0.0323</td>
+      <td>0.2284</td>
+      <td>0.5938</td>
+      <td>-0.0116</td>
+      <td>-0.0562</td>
+      <td>0.2120</td>
+      <td>0.1245</td>
+      <td>-0.4036</td>
+      <td>0.2365</td>
+      <td>0.6394</td>
+      <td>1.1216</td>
+      <td>-0.0649</td>
+      <td>1.1547</td>
+    </tr>
+    <tr>
+      <th>Eksport (qXy)</th>
+      <td>-0.0511</td>
+      <td>0.1039</td>
+      <td>0.0226</td>
+      <td>-0.0834</td>
+      <td>0.0</td>
+      <td>-0.0699</td>
+      <td>-0.0726</td>
+      <td>-0.0581</td>
+      <td>-0.0065</td>
+      <td>-0.2734</td>
+      <td>-0.0223</td>
+      <td>-0.0941</td>
+      <td>-0.0858</td>
+      <td>0.0944</td>
+      <td>0.1723</td>
+      <td>-0.0381</td>
+      <td>-0.0161</td>
+      <td>-0.0487</td>
+      <td>-0.0845</td>
+      <td>-0.0136</td>
+      <td>-0.0834</td>
+    </tr>
+    <tr>
+      <th>Import (qM)</th>
+      <td>0.3025</td>
+      <td>0.4762</td>
+      <td>-0.3632</td>
+      <td>0.4923</td>
+      <td>0.0</td>
+      <td>0.7325</td>
+      <td>0.4312</td>
+      <td>0.1704</td>
+      <td>0.3360</td>
+      <td>0.0494</td>
+      <td>0.1719</td>
+      <td>0.8492</td>
+      <td>0.7612</td>
+      <td>0.2268</td>
+      <td>0.6548</td>
+      <td>1.6523</td>
+      <td>-0.0313</td>
+      <td>0.2976</td>
+      <td>0.4981</td>
+      <td>0.6841</td>
+      <td>0.4940</td>
+    </tr>
+    <tr>
+      <th>Nominelle lønninger (vhW_DA)</th>
+      <td>0.1765</td>
+      <td>-0.0176</td>
+      <td>-0.1758</td>
+      <td>0.2875</td>
+      <td>0.0</td>
+      <td>0.3914</td>
+      <td>0.2504</td>
+      <td>0.8469</td>
+      <td>0.1831</td>
+      <td>0.9918</td>
+      <td>0.2179</td>
+      <td>0.3869</td>
+      <td>0.3387</td>
+      <td>0.2142</td>
+      <td>0.1939</td>
+      <td>0.1643</td>
+      <td>0.0021</td>
+      <td>0.1707</td>
+      <td>0.2905</td>
+      <td>0.3562</td>
+      <td>0.2881</td>
+    </tr>
+    <tr>
+      <th>Primær saldo, andel af BNP<br>(vPrimSaldo / vBNP)</th>
+      <td>-0.5127</td>
+      <td>-0.8401</td>
+      <td>-2.4939</td>
+      <td>-0.8385</td>
+      <td>0.0</td>
+      <td>-1.0971</td>
+      <td>-0.7232</td>
+      <td>-0.6367</td>
+      <td>-0.5563</td>
+      <td>-0.6954</td>
+      <td>-0.4540</td>
+      <td>-0.7894</td>
+      <td>-0.6958</td>
+      <td>-0.6632</td>
+      <td>-0.6197</td>
+      <td>-1.7459</td>
+      <td>-0.8436</td>
+      <td>-0.5287</td>
+      <td>-0.8340</td>
+      <td>-1.0441</td>
+      <td>-0.8351</td>
+    </tr>
+    <tr>
+      <th>Privat forbrug (qC)</th>
+      <td>0.6581</td>
+      <td>0.0131</td>
+      <td>-1.0693</td>
+      <td>1.0723</td>
+      <td>0.0</td>
+      <td>1.8643</td>
+      <td>0.9454</td>
+      <td>0.2773</td>
+      <td>0.7007</td>
+      <td>0.1504</td>
+      <td>0.5574</td>
+      <td>-0.0546</td>
+      <td>-0.0743</td>
+      <td>0.0828</td>
+      <td>0.2480</td>
+      <td>3.1383</td>
+      <td>0.0495</td>
+      <td>0.6581</td>
+      <td>1.0906</td>
+      <td>1.6619</td>
+      <td>1.0761</td>
+    </tr>
+    <tr>
+      <th>Private investeringer<br>(qI_s[iM,spTot]+qIbErhverv)</th>
+      <td>0.1684</td>
+      <td>0.3866</td>
+      <td>-0.1565</td>
+      <td>0.2749</td>
+      <td>0.0</td>
+      <td>0.5390</td>
+      <td>0.2396</td>
+      <td>0.1724</td>
+      <td>0.2670</td>
+      <td>-0.4695</td>
+      <td>0.1044</td>
+      <td>0.2175</td>
+      <td>0.2548</td>
+      <td>0.5366</td>
+      <td>0.4615</td>
+      <td>0.1617</td>
+      <td>-0.2928</td>
+      <td>0.1621</td>
+      <td>0.2789</td>
+      <td>0.4409</td>
+      <td>0.2749</td>
+    </tr>
+  </tbody>
+</table>
