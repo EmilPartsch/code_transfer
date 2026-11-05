@@ -9,8 +9,9 @@ List of shocks to plot. Each tuple contains:
 """
 shock_info = [
   # Offentlige udgifter
-    ("Offentligt_forbrug", "Offentligt forbrug", "Government expenditure",
-        ("Offentligt forbrug  (generelt)", "Government expenditure (generelt)", lambda s: s.qR["off"]+s.qE["off"]+s.hL["off"]+s.qI_s["iTot","off"], "pq")),
+    ("Offentligt_forbrug", "Offentligt forbrug", "Government consumption",
+        ("Offentlige udgifter<br>(vG[gTot] + vI_s[iTot,off])", "Government expenditure<br>(vG[gTot] + vI_s[iTot,off])",
+         lambda s: s.vG["gTot"] + s.vI_s["iTot","off"], "pq")),
     ("Off_vare_FM", "Offentlige varekøb", "Government purchases",
         ("Offentlige varekøb (qR[off])", "Government purchases (qR[off])", lambda s: s.qR["off"], "pq")),
     ("Off_besk_FM", "Offentlig beskæftigelse", "Government employment",
@@ -18,11 +19,11 @@ shock_info = [
     ("Off_lon_FM", "Offentlig løn", "Government wages",
         ("Offentlig løn<br>(vLoensum[off] / hL[off])", "Government wages<br>(vLoensum[off] / hL[off])", lambda s: s.vLoensum["off"] / s.hL["off"], "pq")),
     ("Off_inv_FM", "Offentlige investeringer", "Public investments",
-        ("Offentlige investeringer<br>(qI_s[iTot,off])", "Public investments (qI_s[iTot,off])", lambda s: s.qI_s["iTot","off"], "pq")),
+        ("Offentlige investeringer<br>(qI_s[iTot,off])", "Public investments<br>(qI_s[iTot,off])", lambda s: s.qI_s["iTot","off"], "pq")),
     ("Skattepligtig_indkomstoverforsel_FM", "Skattepligtige overførselsindkomster", "Taxable transfer incomes",
-        ("Skattepligtige indkomsteroverførsler<br>(vOvf)", "Taxable transfer incomes<br>(vOvf)", lambda s: s.vOvf["HhTot"], "pq")),
+        ("Skattepligtige indkomstoverførsler<br>(vOvf)", "Taxable transfer incomes<br>(vOvf)", lambda s: s.vOvf["HhTot"], "pq")),
     ("Ikke_skattepligtig_indkomstoverforsel_FM", "Ikke-skattepligtige overførselsindkomster", "Non-taxable transfer incomes",
-        ("Ikke-skattepligtige indkomsteroverførsler<br>(vOvf)", "Non-taxable transfer incomes<br>(vOvf)", lambda s: s.vOvf["HhTot"], "pq")),
+        ("Ikke-skattepligtige indkomstoverførsler<br>(vOvf)", "Non-taxable transfer incomes<br>(vOvf)", lambda s: s.vOvf["HhTot"], "pq")),
   # Subsidier
     ("Varefordelt_subsidie_FM", "Produktsubsidier", "Product subsidies",
         ("Produktsubsidier (vSub[dTot,tot])", "Product subsidies (vSub[dTot,tot])", lambda s: s.vSub["dTot","tot"], "pq")),
@@ -43,9 +44,9 @@ shock_info = [
     ("Selskabsskat_FM", "Selskabsskat", "Corporate income tax (selskabsskat)",
         ("Selskabsskat (tSelskab)", "Corporate income tax (tSelskab)", lambda s: s.tSelskab, "pm")),
     ("Aktieskat_FM", "Aktieskat", "Dividend and capital gains tax (aktieskat)",
-        ("Aktieskat (tAktie)", "Dividend and capital gains tax<br>(tAktie)", lambda s: s.tAktie, "pm")),
+        ("Aktieskat (tAktieTop)", "Dividend and capital gains tax<br>(tAktieTop)", lambda s: s.tAktieTop, "pm")),
     ("Moms_FM", "Moms", "VAT",
-        ("Moms-provenue (vtMoms)", "VAT revenue (vtMoms)", lambda s: s.vtMoms, "pq")),
+        ("Moms-provenu (vtMoms)", "VAT revenue (vtMoms)", lambda s: s.vtMoms, "pq")),
     ("Registreringsafgift_FM", "Registreringsafgift til privat forbrug", "Household vehicle registration tax",
         ("Registreringsafgift (tReg_y & tReg_m)", "Household vehicle registration tax<br>(tReg_y & tReg_m)", lambda s: s.tReg_y["cBil"]["fre"], "pm")),
     ("Energiafgift_FM", "Energiafgift til privat forbrug", "Household energy taxes",
