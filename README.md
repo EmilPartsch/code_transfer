@@ -14,7 +14,7 @@ dt.REFERENCE_DATABASE = dt.Gdx(fr"../../Model/Gdx/sets.gdx")
 
 # Import variables to plot
 sys.path.insert(0, os.path.abspath("../Templates"))
-import variables_to_plot as vtp 
+import variables_to_plot as vtp
 
 # Define constants
 t1 = 2030  # Shock year
@@ -33,6 +33,9 @@ os.makedirs(table_folder, exist_ok=True)
 DA = True  # Should labels be in Danish or English?
 FM_multipliers = True  # Should the multipliers be in full model or standard model?
 FM_tab_previous = False  # Tab previous version of FM multipliers alongside new version
+tab_previous = True  # Plot/tab previous version of standard shocks alongside new version
+
+Gdx_folder = "Gdx"  # Folder where the .pkl files with previous results are stored
 
 # Define GDX folders and labels
 gdx_folders_info = [
@@ -122,6 +125,19 @@ def shock_files_exist(shock):
         for folder, _ in gdx_folders_info
     )
 
+def load_previous(path, enabled):
+    """Load previous results from a .pkl file if enabled and the file exists, otherwise return None"""
+    if not enabled:
+        return None
+    if not os.path.exists(path):
+        print(f"No previous results found at '{path}' - continuing with current results only")
+        return None
+    return joblib.load(path)
+
+def save_current(df, path):
+    """Save current results (without lambda functions and complex objects) for later comparison"""
+    joblib.dump(df.drop(columns=['getter', 'database', 'baseline']), path)
+
 # Labels for y-axes based on the type of multiplier
 yaxis_title_from_operator = {
     "pq": "Pct.-ændring" if DA else "Pct. change",
@@ -179,16 +195,17 @@ if FM_multipliers:
         .join(table_data)
     )
     fname = "previous_shocks_FM"
-    Gdx_folder = "Gdx"
+    pkl_path_FM = f"{Gdx_folder}/{fname}.pkl"
 
-    # Load previous shock data from a file
-    if FM_tab_previous: df_FM_previous = joblib.load(f"{Gdx_folder}/{fname}.pkl")
-    # Remove lambda functions and complex objects before saving
-    df_FM_no_complex = df_FM.drop(columns=['getter', 'database', 'baseline'])
-    # Save plot_data_no_complex to a file
-    joblib.dump(df_FM_no_complex, f"{Gdx_folder}/{fname}.pkl")
-    
-    FM_tab_previous: models_FM = [(df_FM_previous, fname), (df_FM, "current_shocks_FM")]  # for comparison between previous and current shocks
+    # Load previous shock data (None if flag is off or no file exists yet) BEFORE overwriting it
+    df_FM_previous = load_previous(pkl_path_FM, FM_tab_previous)
+    save_current(df_FM, pkl_path_FM)
+
+    if df_FM_previous is not None:
+        models_FM = [(df_FM_previous, fname), (df_FM, "current_shocks_FM")]  # for comparison between previous and current shocks
+    else:
+        models_FM = [(df_FM, "current_shocks_FM")]
+    compare_FM = len(models_FM) > 1
 
 df_plot = (plot_data
     .apply(get_multiplier, axis=1)
@@ -197,16 +214,16 @@ df_plot = (plot_data
 )
 
 fname = "previous_shocks"
-Gdx_folder = "Gdx"
+pkl_path = f"{Gdx_folder}/{fname}.pkl"
 
-# Load previous shock data from a file
-df_previous = joblib.load(f"{Gdx_folder}/{fname}.pkl")
-models = [(df_previous, fname), (df_plot, "current_shocks")]  # for comparison between previous and current shocks
+# Load previous shock data (None if flag is off or no file exists yet) BEFORE overwriting it
+df_previous = load_previous(pkl_path, tab_previous)
+save_current(df_plot, pkl_path)
 
-# Remove lambda functions and complex objects before saving
-df_plot_no_complex = df_plot.drop(columns=['getter', 'database', 'baseline'])
-# Save plot_data_no_complex to a file
-joblib.dump(df_plot_no_complex, f"{Gdx_folder}/{fname}.pkl")
+if df_previous is not None:
+    models = [(df_previous, fname), (df_plot, "current_shocks")]  # for comparison between previous and current shocks
+else:
+    models = [(df_plot, "current_shocks")]
 
 # Create tables with the values of the multipliers in different years
 if FM_multipliers:
@@ -219,57 +236,53 @@ if FM_multipliers:
             for col, shock_name in enumerate(table_shock_names, 1):
                 df_current = model[0]
                 data = df_current[(df_current.shock_name == shock_name) & (df_current.variable_label == variable_label)]
-                # Extract the first year effect (first value in the data)
-                first_year_effect = data.value.iloc[1] if not data.empty else None
+                if data.empty:
+                    continue  # Shock/variable not available in this model version
+                # Extract the first year effect (first value after the pre-shock year)
+                first_year_effect = data.value.iloc[1]
                 # Append the result to the table data (model, shock, variable, and the first year effect)
                 shock_label = data.shock_label.unique()[0]
                 table_data.append([model[1], variable_label, shock_label, first_year_effect])
 
-    # Make table comparing old and new if so chosen
     # Create a DataFrame from the table data
     table_df = pd.DataFrame(table_data, columns=['Model', 'Variable', 'Shock', 'First Year Effect'])
 
-    # Handle different table structures based on FM_tab_previous
-    if not FM_tab_previous:
+    # Handle different table structures depending on whether previous results are available
+    if not compare_FM:
         # Pivot with shocks as columns and variables as rows
         pivot_table = table_df.pivot_table(
-            index='Variable', 
-            columns='Shock', 
+            index='Variable',
+            columns='Shock',
             values='First Year Effect',
             aggfunc='mean'  # Handles duplicates, if any
         )
-        # Flatten the MultiIndex columns for better readability (if needed)
         pivot_table.columns = [col for col in pivot_table.columns]
-        header = True
     else:
         # Pivot with shocks and variables as index, models as columns
         pivot_table = table_df.pivot_table(
-            index=['Variable', 'Shock'], 
-            columns='Model', 
+            index=['Variable', 'Shock'],
+            columns='Model',
             values='First Year Effect'
         ).reorder_levels(['Shock', 'Variable']).sort_index()
-        header = True
 
     # General formatting for the pivot table
     pivot_table = (
         pivot_table
         .fillna(0)  # Replace NaN with 0
-        .round(4)   # Round values to 2 decimal places
+        .round(4)   # Round values to 4 decimal places
     )
 
     # Generate the HTML table with custom styling
     html_table = pivot_table.to_html(
-        escape=False,  # Allow HTML tags like <br> to render in the table
-        border=0,      # No borders around cells
-        classes="table table-striped table-hover",  # Bootstrap classes for styling
-        justify="center",  # Center-align the table
-        header=header,     # Display column headers
-        index=True         # Display index
+        escape=False,
+        border=0,
+        classes="table table-striped table-hover",
+        justify="center",
+        header=True,
+        index=True
     )
-    # Combine CSS and HTML table
     full_html = html_style + html_table
 
-    # Save the nicely formatted table as an HTML file
     with open(f"{table_folder}/standard_multipliers_FM.html", "w") as f:
         f.write(full_html)
 
@@ -307,9 +320,9 @@ for model, color in zip(models, dt.dream_colors_rgb.values()):
         for col, shock_label in enumerate(shock_names_IRF, 1):
             df_current = model[0]
             data = df_current[(df_current.shock_label == shock_label) & (df_current.variable_label == variable_label)]
-            # Extract the first year effect (first value in the data)
-            first_year_effect = data.value.iloc[1] if not data.empty else None
-            # Append the result to the table data (model, shock, variable, and the first year effect)
+            if data.empty:
+                continue  # Shock/variable not available in this model version
+            first_year_effect = data.value.iloc[1]
             table_data.append([model[1], variable_label, shock_label, first_year_effect])
             fig.add_trace(go.Scatter(
                 y=data.value,
@@ -327,35 +340,27 @@ for row in range(2, len(variable_labels) + 1):
 fname = "standard_IRFs"
 fig.write_html(f"{output_folder}/{fname}.html")
 
-# Make table comparing old and new
-# Create a DataFrame from the table data
+# Make table comparing old and new (or just current if no previous results)
 table_df = pd.DataFrame(table_data, columns=['Model', 'Variable', 'Shock', 'Multiplier'])
-# Pivot the DataFrame to compare shocks across models for each variable
-pivot_table = table_df.pivot_table(index=['Variable', 'Shock'], columns='Model', values='Multiplier')
-
-# Reorder the index levels to have 'Shock' before 'Variable'
-pivot_table = pivot_table.reorder_levels(['Shock', 'Variable'])
-
-# Sort the index to ensure proper ordering
-pivot_table = pivot_table.sort_index()
-
-# Optionally, format the table (e.g., rounding, filling missing values)
-pivot_table = pivot_table.fillna(0)  # Replace NaN with 0 if there's no data
-pivot_table = pivot_table.round(4)  # Round values to 2 decimal places
-
-# Generate HTML table with custom styling
-html_table = pivot_table.to_html(
-    escape=False,  # Allow HTML tags like <br> to render in the table
-    border=0,  # No borders around cells
-    classes="table table-striped table-hover",  # Bootstrap classes for better styling
-    justify="center",  # Center-align the table
-    header=True,  # Display column headers
-    index=True,  # Display index
+pivot_table = (
+    table_df
+    .pivot_table(index=['Variable', 'Shock'], columns='Model', values='Multiplier')
+    .reorder_levels(['Shock', 'Variable'])
+    .sort_index()
+    .fillna(0)
+    .round(4)
 )
 
-# Combine CSS and HTML table
+html_table = pivot_table.to_html(
+    escape=False,
+    border=0,
+    classes="table table-striped table-hover",
+    justify="center",
+    header=True,
+    index=True,
+)
+
 full_html = html_style + html_table
 
-# Save the nicely formatted table as an HTML file
 with open(f"{table_folder}/standard_multipliers.html", "w") as f:
     f.write(full_html)
