@@ -17,18 +17,21 @@ gdx_dir = "./Gdx"
 baseline_path = f"{gdx_dir}/baseline.gdx"
 output_dir = "Output/tables"
 
-# Years to include in the table
-years = [2029, 2030, 2031, 2032, 2035, 2040, 2050]
+# Years to include in the table (every year)
+years = list(range(2029, 2046))
 
-# Shocks to include (file names in Gdx/ without .gdx).
-# Set to None to take every shock gdx in the folder.
-shocks = [
-    "Offentligt_forbrug_ufin_annonceret",
-    # "Offentligt_forbrug_ufin",
-    # "Offentlig_varekoeb_ufin",
-    # "Offentlig_Beskaeftigelse_ufin",
-    # "Offentlige_investeringer_ufin",
+# Shocks and variations to include - gdx files are named {shock}_{variation}.gdx
+shock_names = [
+    "Offentligt_forbrug",
 ]
+variations = [
+    "midl",
+    "perm",
+    "blip",
+    "perm_annonceret",
+]
+shocks = [f"{shock}_{variation}" for shock in shock_names for variation in variations]
+# Set shocks = None to take every shock gdx in the folder instead.
 
 # Files in Gdx/ that are not shocks
 exclude = {"baseline", "shock_year", "Nulstoed_ufin", "Nulstoed_ufin_annonceret"}
