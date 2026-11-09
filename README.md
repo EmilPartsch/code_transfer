@@ -1,90 +1,137 @@
-# coding: utf-8
-"""
-Pull qBNP and CPI responses for a set of shocks out of the gdx files and save them as csv.
-
-Run from Analysis/Standard_shocks (same folder as the plotting script).
-Output: one wide csv (rows = shock x variable, columns = years) and one long csv.
-"""
-import os
-import glob
-import dreamtools as dt
-import pandas as pd
-
-# ----------------------------------------------------------------------------------------------------------------------
-# Settings
-# ----------------------------------------------------------------------------------------------------------------------
-gdx_dir = "./Gdx"
-baseline_path = f"{gdx_dir}/baseline.gdx"
-output_dir = "Output/tables"
-
-# Years to include in the table (every year)
-years = list(range(2029, 2046))
-
-# Shocks and variations to include - gdx files are named {shock}_{variation}.gdx
-shock_names = [
-    "Offentligt_forbrug",
-]
-variations = [
-    "midl",
-    "perm",
-    "blip",
-    "perm_annonceret",
-]
-shocks = [f"{shock}_{variation}" for shock in shock_names for variation in variations]
-# Set shocks = None to take every shock gdx in the folder instead.
-
-# Files in Gdx/ that are not shocks
-exclude = {"baseline", "shock_year", "Nulstoed_ufin", "Nulstoed_ufin_annonceret"}
-
-# Variables: label -> (function of database, operator)
-#   "pq" = pct. change relative to baseline, "m" = absolute difference to baseline
-variables = {
-    "qBNP": (lambda db: db.qBNP, "pq"),
-    "CPI": (lambda db: db.pC["cTot"], "pq"),  # Private consumption deflator as CPI. Swap for your CPI variable if you use another.
-}
-
-# ----------------------------------------------------------------------------------------------------------------------
-# Load baseline
-# ----------------------------------------------------------------------------------------------------------------------
-dt.time(min(years), max(years))
-b = dt.REFERENCE_DATABASE = dt.Gdx(baseline_path)
-
-if shocks is None:
-    shocks = sorted(
-        os.path.splitext(os.path.basename(p))[0]
-        for p in glob.glob(f"{gdx_dir}/*.gdx")
-        if os.path.splitext(os.path.basename(p))[0] not in exclude
-    )
-
-def compare(shock_series, baseline_series, operator):
-    s = shock_series.loc[years]
-    r = baseline_series.loc[years]
-    if operator == "pq":
-        return (s / r - 1) * 100
-    if operator == "m":
-        return s - r
-    raise ValueError(f"Unknown operator {operator}")
-
-# ----------------------------------------------------------------------------------------------------------------------
-# Build table
-# ----------------------------------------------------------------------------------------------------------------------
-rows = []
-for shock in shocks:
-    path = f"{gdx_dir}/{shock}.gdx"
-    if not os.path.exists(path):
-        print(f"Skipping {shock}: {path} not found")
-        continue
-    s = dt.Gdx(path)
-    for label, (func, operator) in variables.items():
-        values = compare(func(s), func(b), operator)
-        for year, value in values.items():
-            rows.append({"shock": shock, "variable": label, "unit": operator, "year": int(year), "value": float(value)})
-
-long = pd.DataFrame(rows)
-wide = long.pivot_table(index=["shock", "variable", "unit"], columns="year", values="value").reset_index()
-
-os.makedirs(output_dir, exist_ok=True)
-long.to_csv(f"{output_dir}/shock_qBNP_CPI_long.csv", index=False)
-wide.to_csv(f"{output_dir}/shock_qBNP_CPI.csv", index=False, float_format="%.4f")
-
-print(wide.to_string(index=False))
+shock,variable,unit,year,value
+Offentligt_forbrug_midl,qBNP,pq,2029,-1.3211653993039363e-12
+Offentligt_forbrug_midl,qBNP,pq,2030,0.6480334343047733
+Offentligt_forbrug_midl,qBNP,pq,2031,0.47080594350765725
+Offentligt_forbrug_midl,qBNP,pq,2032,0.32827745260430863
+Offentligt_forbrug_midl,qBNP,pq,2033,0.1998715823750219
+Offentligt_forbrug_midl,qBNP,pq,2034,0.07465383434090977
+Offentligt_forbrug_midl,qBNP,pq,2035,-0.019432832028576374
+Offentligt_forbrug_midl,qBNP,pq,2036,-0.08900631560555539
+Offentligt_forbrug_midl,qBNP,pq,2037,-0.13671046311040103
+Offentligt_forbrug_midl,qBNP,pq,2038,-0.1661276214068752
+Offentligt_forbrug_midl,qBNP,pq,2039,-0.18150246801029724
+Offentligt_forbrug_midl,qBNP,pq,2040,-0.1866872075136916
+Offentligt_forbrug_midl,qBNP,pq,2041,-0.18501723981904084
+Offentligt_forbrug_midl,qBNP,pq,2042,-0.17924961049062826
+Offentligt_forbrug_midl,qBNP,pq,2043,-0.1713322272647977
+Offentligt_forbrug_midl,qBNP,pq,2044,-0.16260879464046196
+Offentligt_forbrug_midl,qBNP,pq,2045,-0.15389077108368676
+Offentligt_forbrug_midl,CPI,pq,2029,-2.220446049250313e-13
+Offentligt_forbrug_midl,CPI,pq,2030,0.08657022579734441
+Offentligt_forbrug_midl,CPI,pq,2031,0.17743322821723861
+Offentligt_forbrug_midl,CPI,pq,2032,0.24250252741895295
+Offentligt_forbrug_midl,CPI,pq,2033,0.2721100168492363
+Offentligt_forbrug_midl,CPI,pq,2034,0.26980604617254933
+Offentligt_forbrug_midl,CPI,pq,2035,0.2456491741009259
+Offentligt_forbrug_midl,CPI,pq,2036,0.2098914483169123
+Offentligt_forbrug_midl,CPI,pq,2037,0.17051825028704393
+Offentligt_forbrug_midl,CPI,pq,2038,0.1327429462271601
+Offentligt_forbrug_midl,CPI,pq,2039,0.09939642367964296
+Offentligt_forbrug_midl,CPI,pq,2040,0.07158448236512793
+Offentligt_forbrug_midl,CPI,pq,2041,0.04934091622030845
+Offentligt_forbrug_midl,CPI,pq,2042,0.03209239142643039
+Offentligt_forbrug_midl,CPI,pq,2043,0.018979109252281745
+Offentligt_forbrug_midl,CPI,pq,2044,0.00909964245490169
+Offentligt_forbrug_midl,CPI,pq,2045,0.0016405512202721795
+Offentligt_forbrug_perm,qBNP,pq,2029,-1.3211653993039363e-12
+Offentligt_forbrug_perm,qBNP,pq,2030,0.14063966089385982
+Offentligt_forbrug_perm,qBNP,pq,2031,-0.11022007427744507
+Offentligt_forbrug_perm,qBNP,pq,2032,-0.22004528419560243
+Offentligt_forbrug_perm,qBNP,pq,2033,-0.2874785454129669
+Offentligt_forbrug_perm,qBNP,pq,2034,-0.34822202099195065
+Offentligt_forbrug_perm,qBNP,pq,2035,-0.38998730613386545
+Offentligt_forbrug_perm,qBNP,pq,2036,-0.42486047387585435
+Offentligt_forbrug_perm,qBNP,pq,2037,-0.45675934450440936
+Offentligt_forbrug_perm,qBNP,pq,2038,-0.4862308543361338
+Offentligt_forbrug_perm,qBNP,pq,2039,-0.5132247855077932
+Offentligt_forbrug_perm,qBNP,pq,2040,-0.5375765504712748
+Offentligt_forbrug_perm,qBNP,pq,2041,-0.5591075659995504
+Offentligt_forbrug_perm,qBNP,pq,2042,-0.5785173361066098
+Offentligt_forbrug_perm,qBNP,pq,2043,-0.5959682472853611
+Offentligt_forbrug_perm,qBNP,pq,2044,-0.6114754375258658
+Offentligt_forbrug_perm,qBNP,pq,2045,-0.6253361693049908
+Offentligt_forbrug_perm,CPI,pq,2029,-2.220446049250313e-13
+Offentligt_forbrug_perm,CPI,pq,2030,-0.0025319775632803854
+Offentligt_forbrug_perm,CPI,pq,2031,-0.016042252262171708
+Offentligt_forbrug_perm,CPI,pq,2032,-0.024821492825644054
+Offentligt_forbrug_perm,CPI,pq,2033,-0.02500444737559837
+Offentligt_forbrug_perm,CPI,pq,2034,-0.01849749730672423
+Offentligt_forbrug_perm,CPI,pq,2035,-0.008141341435219385
+Offentligt_forbrug_perm,CPI,pq,2036,0.00316739804191446
+Offentligt_forbrug_perm,CPI,pq,2037,0.013250252936480855
+Offentligt_forbrug_perm,CPI,pq,2038,0.020877621158521542
+Offentligt_forbrug_perm,CPI,pq,2039,0.02569262494462876
+Offentligt_forbrug_perm,CPI,pq,2040,0.027922212665720814
+Offentligt_forbrug_perm,CPI,pq,2041,0.028198588140293523
+Offentligt_forbrug_perm,CPI,pq,2042,0.027254076348959266
+Offentligt_forbrug_perm,CPI,pq,2043,0.025630530519848982
+Offentligt_forbrug_perm,CPI,pq,2044,0.023687512378622877
+Offentligt_forbrug_perm,CPI,pq,2045,0.021617608838742086
+Offentligt_forbrug_blip,qBNP,pq,2029,-1.3211653993039363e-12
+Offentligt_forbrug_blip,qBNP,pq,2030,0.7946264198910757
+Offentligt_forbrug_blip,qBNP,pq,2031,-0.020533707650893795
+Offentligt_forbrug_blip,qBNP,pq,2032,-0.025221634751892985
+Offentligt_forbrug_blip,qBNP,pq,2033,-0.030695695089100195
+Offentligt_forbrug_blip,qBNP,pq,2034,-0.04047914653260154
+Offentligt_forbrug_blip,qBNP,pq,2035,-0.023632055719857714
+Offentligt_forbrug_blip,qBNP,pq,2036,-0.015081783370118895
+Offentligt_forbrug_blip,qBNP,pq,2037,-0.010011594676107016
+Offentligt_forbrug_blip,qBNP,pq,2038,-0.006974437579287951
+Offentligt_forbrug_blip,qBNP,pq,2039,-0.005498490138489132
+Offentligt_forbrug_blip,qBNP,pq,2040,-0.00508922662201261
+Offentligt_forbrug_blip,qBNP,pq,2041,-0.0053888484819797355
+Offentligt_forbrug_blip,qBNP,pq,2042,-0.006092575929006472
+Offentligt_forbrug_blip,qBNP,pq,2043,-0.006963616882027512
+Offentligt_forbrug_blip,qBNP,pq,2044,-0.007841718532641817
+Offentligt_forbrug_blip,qBNP,pq,2045,-0.008640609018795153
+Offentligt_forbrug_blip,CPI,pq,2029,-2.220446049250313e-13
+Offentligt_forbrug_blip,CPI,pq,2030,0.021787954464147496
+Offentligt_forbrug_blip,CPI,pq,2031,0.013839730527576144
+Offentligt_forbrug_blip,CPI,pq,2032,0.003933769630770634
+Offentligt_forbrug_blip,CPI,pq,2033,-0.0057268673137711446
+Offentligt_forbrug_blip,CPI,pq,2034,-0.012371634972185852
+Offentligt_forbrug_blip,CPI,pq,2035,-0.01448026128842983
+Offentligt_forbrug_blip,CPI,pq,2036,-0.01333695981550198
+Offentligt_forbrug_blip,CPI,pq,2037,-0.010631436916963555
+Offentligt_forbrug_blip,CPI,pq,2038,-0.007599296101301611
+Offentligt_forbrug_blip,CPI,pq,2039,-0.00493116532934712
+Offentligt_forbrug_blip,CPI,pq,2040,-0.0029059532500874674
+Offentligt_forbrug_blip,CPI,pq,2041,-0.0015526221684880603
+Offentligt_forbrug_blip,CPI,pq,2042,-0.0007743927722514421
+Offentligt_forbrug_blip,CPI,pq,2043,-0.0004294501934287709
+Offentligt_forbrug_blip,CPI,pq,2044,-0.0003770750216292029
+Offentligt_forbrug_blip,CPI,pq,2045,-0.0004998300218272966
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2029,-0.2833048584414688
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2030,0.04039634050032603
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2031,-0.1531450163953063
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2032,-0.25081251741937427
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2033,-0.31853076499060995
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2034,-0.3838391738595126
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2035,-0.42848660523904236
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2036,-0.4634015307967809
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2037,-0.492801516882857
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2038,-0.5181466672437018
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2039,-0.5403044741164043
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2040,-0.559799822629603
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2041,-0.5768917095054338
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2042,-0.5925078733938438
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2043,-0.6068700860127119
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2044,-0.6199556880312707
+Offentligt_forbrug_perm_annonceret,qBNP,pq,2045,-0.6319704582150032
+Offentligt_forbrug_perm_annonceret,CPI,pq,2029,-0.0025726888767896305
+Offentligt_forbrug_perm_annonceret,CPI,pq,2030,0.00556904724819951
+Offentligt_forbrug_perm_annonceret,CPI,pq,2031,0.007005278563565476
+Offentligt_forbrug_perm_annonceret,CPI,pq,2032,0.00886481408071127
+Offentligt_forbrug_perm_annonceret,CPI,pq,2033,0.01197874405982624
+Offentligt_forbrug_perm_annonceret,CPI,pq,2034,0.015338489669791677
+Offentligt_forbrug_perm_annonceret,CPI,pq,2035,0.018689802237936703
+Offentligt_forbrug_perm_annonceret,CPI,pq,2036,0.02173530593165829
+Offentligt_forbrug_perm_annonceret,CPI,pq,2037,0.02414984946470522
+Offentligt_forbrug_perm_annonceret,CPI,pq,2038,0.025683974648171848
+Offentligt_forbrug_perm_annonceret,CPI,pq,2039,0.026260674178857357
+Offentligt_forbrug_perm_annonceret,CPI,pq,2040,0.025948213964710476
+Offentligt_forbrug_perm_annonceret,CPI,pq,2041,0.025011133934849106
+Offentligt_forbrug_perm_annonceret,CPI,pq,2042,0.02376888543385025
+Offentligt_forbrug_perm_annonceret,CPI,pq,2043,0.02239868185953675
+Offentligt_forbrug_perm_annonceret,CPI,pq,2044,0.02098113347182018
+Offentligt_forbrug_perm_annonceret,CPI,pq,2045,0.019519340183249412
